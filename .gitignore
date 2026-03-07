@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+out/
+dist/
+*.vsix
+.vscode-test/
+
+# C++ build artifacts
+cpp/build/
+cpp/cmake-build-debug/
+cpp/cmake-build-release/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.lib
+*.exp
+*.ilk
+*.pdb
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+CMakeFiles/
+*.cmake
+
+# IDE and editor files
+.idea/
+.vscode/
+# Keep the launch.json for debugging configurations
+!.vscode/launch.json
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and temp files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tmp
+*.bak
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+.nyc_output/

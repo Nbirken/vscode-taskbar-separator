@@ -1,0 +1,96 @@
+{
+    "name": "vscode-taskbar-separator",
+    "displayName": "VSCode Taskbar Separator",
+    "description": "Separates multiple VSCode instances in the taskbar with colored badges, similar to Tortoise Git",
+    "version": "0.1.0",
+    "publisher": "vscode-taskbar-separator",
+    "license": "MIT",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "keywords": [
+        "taskbar",
+        "icon",
+        "badge",
+        "instances",
+        "windows"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "configuration": {
+            "type": "object",
+            "title": "Taskbar Separator",
+            "properties": {
+                "taskbarSeparator.badgeColor": {
+                    "type": "string",
+                    "default": "",
+                    "format": "color",
+                    "scope": "resource",
+                    "description": "Color for the badge (hex: #RRGGBB or #RRGGBBAA for alpha). Leave empty for auto-generated color per workspace. Best set at folder or workspace level."
+                },
+                "taskbarSeparator.badgeStyle": {
+                    "type": "string",
+                    "enum": [
+                        "circle",
+                        "square",
+                        "rounded-square"
+                    ],
+                    "default": "circle",
+                    "scope": "window",
+                    "description": "Style of the badge overlay"
+                },
+                "taskbarSeparator.badgeBadgeIconPath": {
+                    "type": "string",
+                    "default": "",
+                    "scope": "resource",
+                    "description": "Path to custom badge icon (.ico file). If empty, uses generated badge. Best set at folder or workspace level."
+                },
+                "taskbarSeparator.badgeText": {
+                    "type": "string",
+                    "default": "",
+                    "scope": "resource",
+                    "description": "Optional text to display on badge (single character recommended). Best set at folder or workspace level."
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "taskbarSeparator.applyBadge",
+                "title": "Apply Taskbar Badge"
+            },
+            {
+                "command": "taskbarSeparator.removeBadge",
+                "title": "Remove Taskbar Badge"
+            },
+            {
+                "command": "taskbarSeparator.showSettings",
+                "title": "Open Taskbar Separator Settings"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "lint": "eslint src --ext .ts,.tsx",
+        "pretest": "npm run compile && npm run lint",
+        "test": "node ./out/test/runTest.js"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.0",
+        "@types/vscode": "^1.85.0",
+        "@typescript-eslint/eslint-plugin": "^8.56.1",
+        "@typescript-eslint/parser": "^8.56.1",
+        "eslint": "^8.56.0",
+        "typescript": "^5.5.0"
+    },
+    "dependencies": {
+        "sharp": "^0.34.0"
+    }
+}
