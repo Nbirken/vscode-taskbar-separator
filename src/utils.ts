@@ -3,10 +3,29 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { promisify } from 'util';
-import sharp from 'sharp';
 import type { IconConfig } from './types';
 
 const execFile = promisify(cp.execFile);
+
+let sharpLoader: any | null = null;
+
+async function getSharp(): Promise<any> {
+    if (sharpLoader) {
+        return sharpLoader;
+    }
+
+    try {
+        const mod = await import('sharp');
+        sharpLoader = (mod as any).default ?? mod;
+        return sharpLoader;
+    } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        throw new Error(
+            `The native dependency "sharp" could not be loaded (${errMsg}). ` +
+            'Reinstall the extension and verify your VS Code architecture matches the packaged native module.'
+        );
+    }
+}
 
 /**
  * Get the path to the C++ wrapper executable.
@@ -197,6 +216,7 @@ async function generateCircleBadge(outputPath: string, config: IconConfig): Prom
 		</svg>
 	`;
 
+    const sharp = await getSharp();
     await sharp(Buffer.from(svgBadge))
         .png()
         .toFile(outputPath);
@@ -221,6 +241,7 @@ async function generateSquareBadge(outputPath: string, config: IconConfig): Prom
 		</svg>
 	`;
 
+    const sharp = await getSharp();
     await sharp(Buffer.from(svgBadge))
         .png()
         .toFile(outputPath);
@@ -246,6 +267,7 @@ async function generateRoundedSquareBadge(outputPath: string, config: IconConfig
 		</svg>
 	`;
 
+    const sharp = await getSharp();
     await sharp(Buffer.from(svgBadge))
         .png()
         .toFile(outputPath);

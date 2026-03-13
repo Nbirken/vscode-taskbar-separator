@@ -1,5 +1,7 @@
 node_modules/**
 !node_modules/sharp/**
+!node_modules/detect-libc/**
+!node_modules/semver/**
 !node_modules/@img/sharp-win32-x64/**
 !node_modules/@img/colour/**
 .vscode-test/**

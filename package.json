@@ -3,7 +3,7 @@
     "displayName": "VSCode Taskbar Separator",
     "icon": "images/icon.png",
     "description": "Separates multiple VSCode instances in the taskbar with colored badges, similar to Tortoise Git",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "publisher": "NicolasBirken",
     "repository": {
         "type": "git",

@@ -8,6 +8,7 @@ import { type IconConfig } from './types';
 
 const execFile = promisify(cp.execFile);
 let outputChannel: vscode.OutputChannel;
+const SHARP_WARNING_SHOWN_KEY = 'taskbarSeparator.sharpWarningShown';
 
 /** Directory where the wrapper is installed for system-wide use. */
 function getWrapperInstallDir(): string {
@@ -27,6 +28,8 @@ function isWrapperInstalled(): boolean {
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Taskbar Separator');
     outputChannel.appendLine('Taskbar Separator extension activated');
+
+    void verifySharpDependency(context);
 
     // Initialize wrapper configuration in AppData
     initializeWrapperConfig();
@@ -79,6 +82,37 @@ export function activate(context: vscode.ExtensionContext) {
             applyCustomBadge();
         })
     );
+}
+
+async function verifySharpDependency(context: vscode.ExtensionContext): Promise<void> {
+    try {
+        const sharpModule: any = await import('sharp');
+        const sharp = sharpModule?.default ?? sharpModule;
+        const versions = sharp?.versions;
+        outputChannel.appendLine(
+            `✓ sharp loaded successfully (platform=${process.platform}, arch=${process.arch}, ` +
+            `sharp=${versions?.sharp ?? 'unknown'}, vips=${versions?.vips ?? 'unknown'})`
+        );
+    } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+
+        outputChannel.appendLine('❌ Failed to load native dependency "sharp".');
+        outputChannel.appendLine(`   platform=${process.platform}, arch=${process.arch}`);
+        outputChannel.appendLine(`   error=${errMsg}`);
+        outputChannel.appendLine('   Badges are disabled until this is fixed.');
+        outputChannel.appendLine('   Fix: reinstall/update extension and ensure packaged sharp binary matches your VS Code architecture.');
+
+        if (!context.globalState.get<boolean>(SHARP_WARNING_SHOWN_KEY)) {
+            const action = await vscode.window.showErrorMessage(
+                'Taskbar Separator: Native dependency "sharp" failed to load. Badge rendering is disabled. Open output for details.',
+                'Open Output'
+            );
+            if (action === 'Open Output') {
+                outputChannel.show(true);
+            }
+            await context.globalState.update(SHARP_WARNING_SHOWN_KEY, true);
+        }
+    }
 }
 
 async function applyCustomBadge(): Promise<void> {
