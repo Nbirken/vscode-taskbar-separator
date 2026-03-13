@@ -1,9 +1,14 @@
 {
     "name": "vscode-taskbar-separator",
     "displayName": "VSCode Taskbar Separator",
+    "icon": "images/icon.png",
     "description": "Separates multiple VSCode instances in the taskbar with colored badges, similar to Tortoise Git",
-    "version": "0.1.0",
-    "publisher": "vscode-taskbar-separator",
+    "version": "0.2.0",
+    "publisher": "NicolasBirken",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Nbirken/vscode-taskbar-separator"
+    },
     "license": "MIT",
     "engines": {
         "vscode": "^1.85.0"
@@ -21,7 +26,7 @@
     "activationEvents": [
         "*"
     ],
-    "main": "./out/extension.js",
+    "main": "./dist/extension.js",
     "contributes": {
         "configuration": {
             "type": "object",
@@ -62,22 +67,31 @@
         "commands": [
             {
                 "command": "taskbarSeparator.applyBadge",
-                "title": "Apply Taskbar Badge"
+                "title": "Taskbar Separator: Apply Taskbar Badge"
             },
             {
                 "command": "taskbarSeparator.removeBadge",
-                "title": "Remove Taskbar Badge"
+                "title": "Taskbar Separator: Remove Taskbar Badge"
             },
             {
                 "command": "taskbarSeparator.showSettings",
-                "title": "Open Taskbar Separator Settings"
+                "title": "Taskbar Separator: Open Taskbar Separator Settings"
+            },
+            {
+                "command": "taskbarSeparator.setupWrapper",
+                "title": "Taskbar Separator: Install Wrapper (Instance Separation)"
+            },
+            {
+                "command": "taskbarSeparator.removeWrapper",
+                "title": "Taskbar Separator: Uninstall Wrapper"
             }
         ]
     },
     "scripts": {
-        "vscode:prepublish": "npm run compile",
-        "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./",
+        "vscode:prepublish": "npm run package && node -e \"const fs=require('fs');const p=require('path');const s=p.join(__dirname,'cpp','build','Release','code.exe');const d=p.join(__dirname,'bin');fs.mkdirSync(d,{recursive:true});fs.copyFileSync(s,p.join(d,'code.exe'));console.log('Copied code.exe to bin/')\"",
+        "compile": "tsc -p ./ && node esbuild.mjs",
+        "package": "node esbuild.mjs --production",
+        "watch": "node esbuild.mjs --watch",
         "lint": "eslint src --ext .ts,.tsx",
         "pretest": "npm run compile && npm run lint",
         "test": "node ./out/test/runTest.js"
@@ -87,6 +101,7 @@
         "@types/vscode": "^1.85.0",
         "@typescript-eslint/eslint-plugin": "^8.56.1",
         "@typescript-eslint/parser": "^8.56.1",
+        "esbuild": "^0.27.3",
         "eslint": "^8.56.0",
         "typescript": "^5.5.0"
     },

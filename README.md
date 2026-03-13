@@ -41,10 +41,20 @@ When you open a folder from the terminal, Start Menu, or "Open with Code" contex
 
 - **Windows 10** or later
 - **VS Code 1.85** or later
-- **Node.js 16+** and npm (for building the extension)
-- **MSVC 2022** and **CMake 3.10+** (for building the C++ wrapper)
 
-### Building
+### Install from Marketplace
+
+1. Install the extension from the VS Code Marketplace
+2. Badge overlays appear automatically — no additional setup needed
+3. For **instance separation** (separate taskbar buttons per workspace), run the command **"Taskbar Separator: Install Wrapper"** from the Command Palette (Ctrl+Shift+P), or accept the prompt shown on first activation
+
+The install command copies the native wrapper to `%APPDATA%\VSCode-TaskbarSeparator\`, adds it to your user PATH, and patches VS Code shortcuts and "Open with Code" context menu entries.
+
+> **Tip:** If VS Code is pinned to the taskbar, unpin and re-pin it after installing the wrapper so the pin picks up the new shortcut target.
+
+To reverse all changes, run **"Taskbar Separator: Uninstall Wrapper"** from the Command Palette.
+
+### Building from Source
 
 ```bash
 # Build the extension
@@ -58,36 +68,13 @@ cmake --build build --config Release
 # Output: cpp/build/Release/code.exe
 ```
 
-### Installing the Wrapper
+Building from source requires **Node.js 16+**, **MSVC 2022**, and **CMake 3.10+**.
 
-**Step 1 — PATH (for terminal `code` commands):**
-
-1. Create a directory (e.g. `C:\tools\vscode-wrapper\`)
-2. Copy `cpp/build/Release/code.exe` into it
-3. Add that directory to your PATH **before** VS Code's directory
-
-**Step 2 — Deep integration (for Start Menu, Desktop, "Open with Code"):**
-
-```bash
-# From the directory containing the wrapper:
-code.exe --install
-```
-
-This patches VS Code's Start Menu shortcut, Desktop shortcut (if present), and the "Open with Code" right-click context menu entries to route through the wrapper. The original VS Code icon is preserved.
-
-To reverse all changes:
-
-```bash
-code.exe --uninstall
-```
-
-> **Tip:** If VS Code is pinned to the taskbar, unpin and re-pin it after `--install` so the pin picks up the new shortcut target.
-
-Both commands work from a terminal (output to console) or by double-clicking (MessageBox feedback).
+### How the Wrapper Works
 
 When you run `code .` from a terminal, click VS Code in the Start Menu, or use "Open with Code" in Explorer, the wrapper intercepts the call, finds the real VS Code via the registry, and decides whether to pass through or isolate based on whether VS Code is already running.
 
-> **Transparency**: The wrapper is designed to be fully transparent. It passes all arguments through to the real `Code.exe`. Isolation flags (`--user-data-dir`, `--new-window`, `--app-user-model-id`) are only added for secondary instances.
+> **Transparency**: The wrapper passes all arguments through to the real `Code.exe`. Isolation flags (`--user-data-dir`, `--new-window`, `--app-user-model-id`) are only added for secondary instances.
 
 ### What the Wrapper Does
 
@@ -162,6 +149,8 @@ No configuration needed. The extension auto-generates a deterministic color.
 | `taskbarSeparator.applyBadge` | Apply Taskbar Badge |
 | `taskbarSeparator.removeBadge` | Remove Taskbar Badge |
 | `taskbarSeparator.showSettings` | Open Taskbar Separator Settings |
+| `taskbarSeparator.setupWrapper` | Install Wrapper (Instance Separation) |
+| `taskbarSeparator.removeWrapper` | Uninstall Wrapper |
 
 Access via Command Palette (Ctrl+Shift+P).
 
@@ -170,7 +159,7 @@ Access via Command Palette (Ctrl+Shift+P).
 ### Badge Not Appearing
 
 1. Check the **"Taskbar Separator"** output channel (View → Output → select "Taskbar Separator") for error messages
-2. Ensure the C++ wrapper `code.exe` is found — it should be in `bin/`, `%APPDATA%\VSCode-TaskbarSeparator\`, or `cpp/build/Release/`
+2. Ensure the C++ wrapper `code.exe` is found — it should be in the extension's `bin/` directory or `%APPDATA%\VSCode-TaskbarSeparator\`
 3. Verify the extension is active: Command Palette → "Apply Taskbar Badge"
 
 ### Separate Buttons Not Appearing

@@ -1,9 +1,28 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as cp from 'child_process';
+import { promisify } from 'util';
 import { getActiveWindowHandle, generateBadgeIcon, applyBadgeToWindow, removeBadgeFromWindow, generateDeterministicColor } from './utils';
 import { type IconConfig } from './types';
 
+const execFile = promisify(cp.execFile);
 let outputChannel: vscode.OutputChannel;
+
+/** Directory where the wrapper is installed for system-wide use. */
+function getWrapperInstallDir(): string {
+    return path.join(process.env.APPDATA || '', 'VSCode-TaskbarSeparator');
+}
+
+/** Path to the wrapper exe bundled inside the extension. */
+function getBundledWrapperPath(): string {
+    return path.join(__dirname, '..', 'bin', 'code.exe');
+}
+
+/** Check whether the wrapper has been installed to AppData. */
+function isWrapperInstalled(): boolean {
+    return fs.existsSync(path.join(getWrapperInstallDir(), 'code.exe'));
+}
 
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Taskbar Separator');
@@ -24,6 +43,12 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('taskbarSeparator.showSettings', () => {
             openSettings();
+        }),
+        vscode.commands.registerCommand('taskbarSeparator.setupWrapper', () => {
+            setupWrapper();
+        }),
+        vscode.commands.registerCommand('taskbarSeparator.removeWrapper', () => {
+            removeWrapper();
         })
     );
 
@@ -31,6 +56,11 @@ export function activate(context: vscode.ExtensionContext) {
     setTimeout(() => {
         applyCustomBadge();
     }, 100);
+
+    // Prompt to install wrapper if not yet set up
+    if (!isWrapperInstalled()) {
+        promptWrapperSetup();
+    }
 
     // Watch for configuration changes
     context.subscriptions.push(
@@ -150,6 +180,153 @@ function openSettings(): void {
         'workbench.action.openSettings',
         'taskbarSeparator'
     );
+}
+
+async function promptWrapperSetup(): Promise<void> {
+    const action = await vscode.window.showInformationMessage(
+        'Taskbar Separator: Install the wrapper to get separate taskbar buttons for each VS Code instance?',
+        'Install Wrapper',
+        'Not Now'
+    );
+    if (action === 'Install Wrapper') {
+        setupWrapper();
+    }
+}
+
+async function setupWrapper(): Promise<void> {
+    try {
+        const bundled = getBundledWrapperPath();
+        if (!fs.existsSync(bundled)) {
+            vscode.window.showErrorMessage('Wrapper binary not found in extension. Please reinstall the extension.');
+            return;
+        }
+
+        const installDir = getWrapperInstallDir();
+        fs.mkdirSync(installDir, { recursive: true });
+
+        // Copy wrapper to AppData
+        const dest = path.join(installDir, 'code.exe');
+        fs.copyFileSync(bundled, dest);
+        outputChannel.appendLine(`✓ Copied wrapper to ${dest}`);
+
+        // Add to user PATH if not already there
+        await addToUserPath(installDir);
+
+        // Run --install to patch shortcuts and registry
+        try {
+            const { stdout } = await execFile(dest, ['--install']);
+            outputChannel.appendLine(`Wrapper --install output: ${stdout}`);
+        } catch {
+            // --install may use MessageBox in non-console mode, which is fine
+        }
+
+        vscode.window.showInformationMessage(
+            'Taskbar Separator wrapper installed. Restart VS Code for full effect. ' +
+            'If VS Code is pinned to the taskbar, unpin and re-pin it.'
+        );
+        outputChannel.appendLine('✓ Wrapper setup complete');
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        outputChannel.appendLine(`❌ Wrapper setup failed: ${msg}`);
+        vscode.window.showErrorMessage(`Wrapper setup failed: ${msg}`);
+    }
+}
+
+async function removeWrapper(): Promise<void> {
+    try {
+        const installDir = getWrapperInstallDir();
+        const exe = path.join(installDir, 'code.exe');
+
+        if (fs.existsSync(exe)) {
+            // Run --uninstall to revert shortcuts and registry
+            try {
+                await execFile(exe, ['--uninstall']);
+            } catch {
+                // --uninstall may use MessageBox
+            }
+
+            fs.unlinkSync(exe);
+            outputChannel.appendLine('✓ Removed wrapper executable');
+        }
+
+        // Remove from user PATH
+        await removeFromUserPath(installDir);
+
+        vscode.window.showInformationMessage(
+            'Taskbar Separator wrapper uninstalled. Restart VS Code for full effect.'
+        );
+        outputChannel.appendLine('✓ Wrapper removal complete');
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        outputChannel.appendLine(`❌ Wrapper removal failed: ${msg}`);
+        vscode.window.showErrorMessage(`Wrapper removal failed: ${msg}`);
+    }
+}
+
+async function addToUserPath(dir: string): Promise<void> {
+    try {
+        const { stdout } = await execFile('reg', [
+            'query', 'HKCU\\Environment', '/v', 'Path'
+        ]);
+        const match = stdout.match(/Path\s+REG_[A-Z_]+\s+(.*)/i);
+        const currentPath = match ? match[1].trim() : '';
+
+        // Check if already in PATH (case-insensitive)
+        const entries = currentPath.split(';').map(e => e.trim().toLowerCase());
+        if (entries.includes(dir.toLowerCase())) {
+            outputChannel.appendLine('Wrapper directory already in user PATH');
+            return;
+        }
+
+        // Prepend to PATH so it takes priority over the real Code.exe
+        const newPath = dir + ';' + currentPath;
+        await execFile('reg', [
+            'add', 'HKCU\\Environment', '/v', 'Path', '/t', 'REG_EXPAND_SZ', '/d', newPath, '/f'
+        ]);
+
+        // Broadcast WM_SETTINGCHANGE so new processes pick it up
+        await execFile('powershell', ['-NoProfile', '-Command',
+            '[Environment]::SetEnvironmentVariable("Path", $null, "User"); ' +
+            'Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition \'[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);\'; ' +
+            '$r = [UIntPtr]::Zero; [Win32.NativeMethods]::SendMessageTimeout([IntPtr]0xFFFF, 0x001A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$r)'
+        ]);
+
+        outputChannel.appendLine(`✓ Added ${dir} to user PATH`);
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        outputChannel.appendLine(`⚠ Could not update PATH automatically: ${msg}`);
+        outputChannel.appendLine(`Add "${dir}" to your PATH manually to enable instance separation from terminal.`);
+    }
+}
+
+async function removeFromUserPath(dir: string): Promise<void> {
+    try {
+        const { stdout } = await execFile('reg', [
+            'query', 'HKCU\\Environment', '/v', 'Path'
+        ]);
+        const match = stdout.match(/Path\s+REG_[A-Z_]+\s+(.*)/i);
+        if (!match) { return; }
+
+        const currentPath = match[1].trim();
+        const entries = currentPath.split(';').filter(e =>
+            e.trim().toLowerCase() !== dir.toLowerCase() && e.trim() !== ''
+        );
+        const newPath = entries.join(';');
+
+        await execFile('reg', [
+            'add', 'HKCU\\Environment', '/v', 'Path', '/t', 'REG_EXPAND_SZ', '/d', newPath, '/f'
+        ]);
+
+        // Broadcast WM_SETTINGCHANGE
+        await execFile('powershell', ['-NoProfile', '-Command',
+            'Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition \'[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);\'; ' +
+            '$r = [UIntPtr]::Zero; [Win32.NativeMethods]::SendMessageTimeout([IntPtr]0xFFFF, 0x001A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$r)'
+        ]);
+
+        outputChannel.appendLine(`✓ Removed ${dir} from user PATH`);
+    } catch {
+        outputChannel.appendLine(`⚠ Could not remove from PATH automatically. Remove "${dir}" from your user PATH manually.`);
+    }
 }
 
 function simpleHash(str: string): string {

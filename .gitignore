@@ -5,6 +5,7 @@ package-lock.json
 # Build outputs
 out/
 dist/
+bin/
 *.vsix
 .vscode-test/
 
