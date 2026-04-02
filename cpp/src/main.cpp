@@ -481,10 +481,28 @@ int CmdRemoveOverlay(DWORD pid)
 
 // ---------------------------------------------------------------------------
 // Check whether any real VS Code (Code.exe) process is already running.
-// We compare the full executable path so we never match our own wrapper.
+// Path matching is intentionally loose across machines, but we explicitly
+// exclude wrapper locations so we don't match ourselves.
 // ---------------------------------------------------------------------------
 
-bool IsVSCodeRunning(const std::wstring &realCodeExePath)
+static std::wstring GetOwnExePath();
+
+static std::wstring ToLower(const std::wstring &s)
+{
+    std::wstring out = s;
+    for (auto &ch : out)
+        ch = (wchar_t)towlower(ch);
+    return out;
+}
+
+static bool StartsWith(const std::wstring &value, const std::wstring &prefix)
+{
+    if (prefix.empty() || value.size() < prefix.size())
+        return false;
+    return value.compare(0, prefix.size(), prefix) == 0;
+}
+
+bool IsVSCodeRunning()
 {
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE)
@@ -493,6 +511,15 @@ bool IsVSCodeRunning(const std::wstring &realCodeExePath)
     PROCESSENTRY32W pe = {};
     pe.dwSize = sizeof(pe);
     DWORD selfPid = GetCurrentProcessId();
+
+    std::wstring ownPath = ToLower(GetOwnExePath());
+    std::wstring wrapperRoot;
+    wchar_t appData[MAX_PATH] = {};
+    if (GetEnvironmentVariableW(L"APPDATA", appData, MAX_PATH))
+    {
+        wrapperRoot = ToLower(std::wstring(appData) + L"\\VSCode-TaskbarSeparator\\");
+    }
+
     bool found = false;
 
     if (Process32FirstW(snap, &pe))
@@ -504,19 +531,27 @@ bool IsVSCodeRunning(const std::wstring &realCodeExePath)
             if (_wcsicmp(pe.szExeFile, L"Code.exe") != 0)
                 continue;
 
-            // Confirm it's the real VS Code by checking its full path
             HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID);
-            if (hProc)
+            if (!hProc)
+                continue;
+
+            wchar_t exePath[MAX_PATH] = {};
+            DWORD sz = MAX_PATH;
+            bool isWrapperProcess = false;
+            if (QueryFullProcessImageNameW(hProc, 0, exePath, &sz))
             {
-                wchar_t exePath[MAX_PATH] = {};
-                DWORD sz = MAX_PATH;
-                if (QueryFullProcessImageNameW(hProc, 0, exePath, &sz))
-                {
-                    if (_wcsicmp(exePath, realCodeExePath.c_str()) == 0)
-                        found = true;
-                }
-                CloseHandle(hProc);
+                std::wstring procPath = ToLower(exePath);
+                if (_wcsicmp(procPath.c_str(), ownPath.c_str()) == 0)
+                    isWrapperProcess = true;
+                if (!wrapperRoot.empty() && StartsWith(procPath, wrapperRoot))
+                    isWrapperProcess = true;
             }
+            CloseHandle(hProc);
+
+            if (isWrapperProcess)
+                continue;
+
+            found = true;
             if (found)
                 break;
         } while (Process32NextW(snap, &pe));
@@ -870,7 +905,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
         // 2. Check if a real VS Code process is already running.
         //    First launch  → passthrough (keeps default AUMID, full jump list)
         //    Subsequent    → isolated wrapper (custom AUMID, separate taskbar button)
-        bool vsCodeAlreadyRunning = IsVSCodeRunning(vscodePath + L"\\Code.exe");
+        bool vsCodeAlreadyRunning = IsVSCodeRunning();
 
         // 3. Parse args, extract workspace path
         std::wstring workspacePath;
