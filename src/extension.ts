@@ -117,7 +117,6 @@ async function verifySharpDependency(context: vscode.ExtensionContext): Promise<
 
 async function applyCustomBadge(): Promise<void> {
     try {
-        outputChannel.show(true);
         outputChannel.appendLine('=== Apply Taskbar Badge ===');
 
         const config = vscode.workspace.getConfiguration('taskbarSeparator');
